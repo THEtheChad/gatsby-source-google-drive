@@ -4,12 +4,12 @@
   "main": "index.js",
   "scripts": {
     "build": "babel src --out-dir ./lib --ignore __tests__",
-    "watch": "babel src --out-dir ./lib -w --ignore __tests__"
+    "watch": "babel src --out-dir ./lib -w --ignore __tests__",
+    "prepublish": "cross-env NODE_ENV=production npm run build"
   },
   "author": "Chad Elliott <chad@exceleratedigital.com>",
   "license": "MIT",
   "dependencies": {
-    "babel-preset-es2015": "^6.24.1",
     "babel-runtime": "^6.26.0",
     "cheerio": "^1.0.0-rc.2",
     "fs-extra": "^4.0.2",
@@ -21,6 +21,8 @@
     "webpack": "^3.10.0"
   },
   "devDependencies": {
-    "babel-cli": "^6.26.0"
+    "babel-preset-es2015": "^6.24.1",
+    "babel-cli": "^6.26.0",
+    "cross-env": "^5.1.3"
   }
 }
