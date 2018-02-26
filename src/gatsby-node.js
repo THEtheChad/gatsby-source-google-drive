@@ -3,12 +3,10 @@ import path from 'path'
 import fs from 'fs-extra'
 import crypto from 'crypto'
 import cheerio from 'cheerio'
-import watcher from './watcher'
+import Promise from 'bluebird'
 import api from './api'
 
 const folder_cache = {}
-
-process.on('unhandledRejection', err => { throw err })
 
 async function getFiles(original_params, opts = {}) {
   const params = Object.assign({}, original_params)
@@ -43,8 +41,9 @@ async function cacheFile(node) {
 }
 
 const extensions = /jpeg|jpg|png|webp|tif|tiff/
-function isImage(node) { return extensions.test(node.mimeType) }
-function isDocument(node) { return node.mimeType === 'application/vnd.google-apps.document' }
+const isImage = node => extensions.test(node.mimeType)
+const isDocument = node => node.mimeType === 'application/vnd.google-apps.document'
+const isFolder = node => node.mimeType === 'application/vnd.google-apps.folder'
 
 async function toNode(file, opts = {}) {
   const node = Object.assign(file, {
@@ -72,6 +71,25 @@ async function toNode(file, opts = {}) {
       .load(html)('body')
       .html()
   }
+  else if (isFolder(node) && !opts.removal) {
+    const hydrated = await api('get', {
+      fileId: node.id,
+      fields: [
+        'id',
+        'mimeType',
+        'trashed',
+        'parents',
+        'kind',
+        'name',
+        'explicitlyTrashed',
+        'modifiedTime',
+        'description'
+      ].join()
+    })
+
+    Object.assign(node, hydrated)
+    content = JSON.stringify(node)
+  }
   else {
     content = JSON.stringify(node)
   }
@@ -90,7 +108,7 @@ async function getFilesFromFolder(folder, opts = {}) {
   let files = await getFiles({ q: `"${folder.id}" in parents and trashed = false` }, {
     all: true
   })
-  files.forEach(file => file.path = path.join(folder.path, folder.name))
+  files.forEach(file => file.path = path.join(folder.path, encodeURIComponent(folder.name)))
 
   let folders = [files]
   if (opts.recursive) {
@@ -141,11 +159,6 @@ async function getFolderFromPath(source, opts = {}) {
   return folder
 }
 
-async function toNodes(arr) {
-  const processed = arr.map(toNode)
-  return await Promise.all(processed)
-}
-
 // export const setFieldsOnGraphQLNodeType = require('extend-node.js')
 
 export async function sourceNodes({ boundActionCreators }, opts = {}) {
@@ -153,55 +166,55 @@ export async function sourceNodes({ boundActionCreators }, opts = {}) {
   folder_cache['root'] = root
 
   const files = await getFilesFromFolder(root, { recursive: true })
-  const nodes = await toNodes(files)
+  const nodes = await Promise.map(files, toNode, { concurrency: 10 })
 
   const { createNode, deleteNode } = boundActionCreators
   nodes.forEach(node => createNode(node));
 
-  async function remove(file) {
-    const node = await toNode(file, { removal: true })
-    deleteNode(node.id, node)
-  }
+  // async function remove(file) {
+  //   const node = await toNode(file, { removal: true })
+  //   deleteNode(node.id, node)
+  // }
 
-  // listen for changes
-  let count = 0
-  watcher.on('change', async change => {
-    console.log(`change: ${++count}`)
-    console.log(change)
+  // // listen for changes
+  // let count = 0
+  // watcher.on('change', async change => {
+  //   console.log(`change: ${++count}`)
+  //   console.log(change)
 
-    if (change.removed === true) {
-      remove(change.file)
-      return
-    }
+  //   if (change.removed === true) {
+  //     remove(change.file)
+  //     return
+  //   }
 
-    const hydrated = await api('get', {
-      fileId: change.fileId,
-      fields: [
-        'id',
-        'mimeType',
-        'trashed',
-        'parents',
-        'name',
-        'explicitlyTrashed',
-        'modifiedTime'
-      ].join()
-    })
+  //   const hydrated = await api('get', {
+  //     fileId: change.fileId,
+  //     fields: [
+  //       'id',
+  //       'mimeType',
+  //       'trashed',
+  //       'parents',
+  //       'name',
+  //       'explicitlyTrashed',
+  //       'modifiedTime'
+  //     ].join()
+  //   })
 
-    if (hydrated.trashed) {
-      remove(change.file)
-      return
-    }
+  //   if (hydrated.trashed) {
+  //     remove(change.file)
+  //     return
+  //   }
 
-    let folder
-    hydrated.parents.find(parentId =>
-      folder = (folder_cache.root.id === hydrated.id) ? root : folder_cache[parentId])
+  //   let folder
+  //   hydrated.parents.find(parentId =>
+  //     folder = (folder_cache.root.id === hydrated.id) ? root : folder_cache[parentId])
 
-    if (!folder) {
-      remove(change.file)
-    } else {
-      change.file.path = path.join(folder.path, folder.name)
-      const node = await toNode(change.file)
-      createNode(node)
-    }
-  })
+  //   if (!folder) {
+  //     remove(change.file)
+  //   } else {
+  //     change.file.path = path.join(folder.path, folder.name)
+  //     const node = await toNode(change.file)
+  //     createNode(node)
+  //   }
+  // })
 }
