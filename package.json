@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "babel src --out-dir ./lib --ignore __tests__",
-    "watch": "babel src --out-dir ./lib -w --ignore __tests__",
+    "build": "babel src --out-dir ./ --ignore __tests__",
+    "watch": "babel src --out-dir ./ -w --ignore __tests__",
     "prepublish": "cross-env NODE_ENV=production npm run build"
   },
   "author": "Chad Elliott <chad@exceleratedigital.com>",
