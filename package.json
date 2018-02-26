@@ -1,5 +1,6 @@
 {
   "name": "gatsby-source-google-drive",
+  "version": "0.0.1",
   "description": "",
   "main": "index.js",
   "scripts": {
